@@ -156,6 +156,59 @@ server.registerPrompt(
   }
 );
 
+// Sampling
+server.registerTool(
+  "create-random-user",
+  {
+    title: "Create Random User",
+    description: "Creates a random user with dummy data.",
+  },
+  async () => {
+    const res = await server.server.request(
+      {
+        // method: "elicitation/create", // Kullanıcıdan ek bilgi alma olanağı sağlıyor.
+        method: "sampling/createMessage", // ai'da prompt çalıştırma olanağı sağlıyor.
+        params: {
+          messages: [
+            {
+              role: "user",
+              content: {
+                type: "text",
+                text: "Create a random user with dummy data. The user should have a name, email, address, and phone number. Return the user in JSON format.",
+              },
+            },
+          ],
+          maxTokens: 1024,
+        },
+      },
+      CreateMessageResultSchema // Request'in sonucunun ne olması gerektiğini belirtiyor.
+    ); // Client'a istek gönderme olanağı sağlıyor.
+
+    if (res.content.type !== "text") {
+      return {
+        content: [{ type: "text", text: "Failed to create random user!" }],
+      };
+    }
+
+    try {
+      const formattedRandomUser = res.content.text
+        .trim()
+        .replace(/^```json/, "")
+        .replace(/```$/, "")
+        .trim();
+      const randomUser = JSON.parse(formattedRandomUser);
+      const id = await createUser(randomUser);
+      return {
+        content: [{ type: "text", text: `User ${id} created successfully!` }],
+      };
+    } catch {
+      return {
+        content: [{ type: "text", text: "Failed to create random user!" }],
+      };
+    }
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
