@@ -8,7 +8,7 @@ import {
   Prompt,
   PromptMessage,
 } from "@modelcontextprotocol/sdk/types.js";
-import { generateText } from "ai";
+import { generateText, jsonSchema, ToolSet } from "ai";
 
 const client = new Client({
   name: "test-mcp-client",
@@ -106,6 +106,7 @@ async function main() {
         }
         break;
       case "Query":
+        await handleQuery(tools);
     }
   }
 }
@@ -190,6 +191,43 @@ async function getServerMessagePrompt(message: PromptMessage) {
   });
 
   return text;
+}
+
+// Tool, Prompt ve Resource'ları AI'a aktararak, AI'ımızın Github Copilot gibi otomatik çalışmasını sağlayabiliriz.
+async function handleQuery(tools: Tool[]) {
+  const query = await input({ message: "Enter your query" });
+
+  /* 
+    Burada text dışında toolResults'a alıyoruz. Bunun sebebi AI'a "Bana şu isim, email, 
+    adres ve telefon numarasıyla yeni bir kullanıcı yarat" dememizdir. O da "Bunun için 
+    bir tool'um var" diyerek tool'un sonucunu dönecektir.
+    */
+  const { text, toolResults } = await generateText({
+    model: google("gemini-2.0-flash"),
+    prompt: query,
+    tools: tools.reduce(
+      (obj, tool) => ({
+        ...obj,
+        [tool.name]: {
+          description: tool.description,
+          parameters: jsonSchema(tool.inputSchema),
+          execute: async (args: Record<string, any>) => {
+            // Bir tool'u çağırdığında ona ne yapması gerektiğini söylüyoruz.
+            return await client.callTool({
+              name: tool.name,
+              arguments: args,
+            });
+          },
+        },
+      }),
+      {} as ToolSet
+    ),
+  });
+
+  console.log(
+    // @ts-expect-error
+    text || toolResults[0]?.result?.content[0]?.text || "No text generated."
+  );
 }
 
 main();
