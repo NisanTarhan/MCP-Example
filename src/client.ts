@@ -1,7 +1,14 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { select, input, confirm } from "@inquirer/prompts";
-import { Tool, ResourceTemplate } from "@modelcontextprotocol/sdk/types.js";
+import {
+  Tool,
+  ResourceTemplate,
+  Prompt,
+  PromptMessage,
+} from "@modelcontextprotocol/sdk/types.js";
+import { generateText } from "ai";
 
 const client = new Client({
   name: "test-mcp-client",
@@ -13,6 +20,10 @@ const transport = new StdioClientTransport({
   command: "node",
   args: ["build/server.js"],
   stderr: "ignore", // Sunucudaki bir hata konsolu çıktısını client tarafında görmezden gel
+});
+
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
 async function main() {
@@ -79,7 +90,21 @@ async function main() {
         }
         break;
       case "Prompts":
-
+        const promptName = await select({
+          message: "Select a prompt",
+          choices: (prompts as Prompt[]).map((prompt) => ({
+            name: prompt.name,
+            value: prompt.name,
+            description: prompt.description,
+          })),
+        });
+        const prompt = (prompts as Prompt[]).find((p) => p.name === promptName);
+        if (prompt == null) {
+          console.error("Prompt not found.");
+        } else {
+          await getPrompt(prompt);
+        }
+        break;
       case "Query":
     }
   }
@@ -126,6 +151,45 @@ async function getResource(uri: string) {
   console.log(
     JSON.stringify(JSON.parse(res.contents[0].text as string), null, 2)
   );
+}
+
+async function getPrompt(prompt: Prompt) {
+  const args: Record<string, string> = {};
+  const promptArgs = prompt.arguments || [];
+  for (const arg of promptArgs) {
+    args[arg.name] = await input({
+      message: `Enter value for ${arg.name}:`,
+    });
+  }
+
+  const response = await client.getPrompt({
+    name: prompt.name,
+    arguments: args,
+  });
+
+  // response birden fazla mesaj içerebilir. Önemli olan, bu mesajların AI chatbot içerisinde kullanıldığından emin olmaktır.
+  for (const message of response.messages) {
+    console.log(await getServerMessagePrompt(message));
+  }
+}
+
+async function getServerMessagePrompt(message: PromptMessage) {
+  if (message.content.type !== "text") return; // Sadece metin içeren mesajları destekliyoruz.
+
+  console.log(message.content.text); // Kullanıcı prompt'un ne olduğunu görebilir.
+  const run = await confirm({
+    message: "Would you like to run the above prompt",
+    default: true,
+  });
+
+  if (!run) return;
+
+  const { text } = await generateText({
+    model: google("gemini-2.0-flash"),
+    prompt: message.content.text,
+  });
+
+  return text;
 }
 
 main();
