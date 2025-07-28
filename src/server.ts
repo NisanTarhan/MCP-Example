@@ -131,6 +131,31 @@ server.registerResource(
   }
 );
 
+// Prompt
+server.registerPrompt(
+  "create-user-prompt",
+  {
+    title: "Create User Prompt",
+    description: "A prompt to create a new user.",
+    argsSchema: {
+      name: z.string(),
+    },
+  },
+  ({ name }) => {
+    return {
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `Please create a new user with the name ${name}. The user should have an email, address, and phone number.`,
+          },
+        },
+      ],
+    };
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
