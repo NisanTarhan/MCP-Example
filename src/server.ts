@@ -63,6 +63,31 @@ async function createUser(user: UserType) {
   return id;
 }
 
+server.registerResource(
+  "users",
+  "users://all",
+  {
+    title: "Users",
+    description: "A collection of all users in the database.",
+    mimeType: "application/json",
+  },
+  async (uri) => {
+    const users = await import("./data/users.json", {
+      with: { type: "json" },
+    }).then((mod) => mod.default);
+
+    return {
+      contents: [
+        {
+          uri: uri.href, // Erişmeye çalıştığımız url
+          text: JSON.stringify(users),
+          mimeType: "application/json", // Data'nın nasıl kullanılacağını belirtir.
+        },
+      ],
+    };
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
