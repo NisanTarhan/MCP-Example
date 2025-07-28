@@ -24,6 +24,7 @@ const server = new McpServer({
   },
 });
 
+// Tools
 server.registerTool(
   "create-user",
   {
@@ -63,6 +64,7 @@ async function createUser(user: UserType) {
   return id;
 }
 
+// Resource
 server.registerResource(
   "users",
   "users://all",
@@ -82,6 +84,47 @@ server.registerResource(
           uri: uri.href, // Erişmeye çalıştığımız url
           text: JSON.stringify(users),
           mimeType: "application/json", // Data'nın nasıl kullanılacağını belirtir.
+        },
+      ],
+    };
+  }
+);
+
+// Resource Template
+server.registerResource(
+  "user-detail",
+  new ResourceTemplate("users://{userId}/profile", { list: undefined }),
+  {
+    title: "User Detail",
+    description: "Details of a specific user by ID.",
+    mimeType: "application/json",
+  },
+  async (uri, { userId }) => {
+    const users = await import("./data/users.json", {
+      with: { type: "json" },
+    }).then((mod) => mod.default);
+
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+    const user = users.find((user) => user.id === parseInt(userIdStr, 10));
+
+    if (!user) {
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify({ error: "User not found" }),
+            mimeType: "application/json",
+          },
+        ],
+      };
+    }
+
+    return {
+      contents: [
+        {
+          uri: uri.href,
+          text: JSON.stringify(user),
+          mimeType: "application/json",
         },
       ],
     };
