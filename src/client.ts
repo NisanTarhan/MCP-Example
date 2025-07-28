@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { select, input, confirm } from "@inquirer/prompts";
-import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { Tool, ResourceTemplate } from "@modelcontextprotocol/sdk/types.js";
 
 const client = new Client({
   name: "test-mcp-client",
@@ -52,7 +52,32 @@ async function main() {
         }
         break;
       case "Resources":
-
+        const resourceUri = await select({
+          message: "Select a resource",
+          choices: [
+            ...resources.map((resource) => ({
+              name: resource.name,
+              value: resource.uri,
+              description: resource.description,
+            })),
+            ...(resourceTemplates as ResourceTemplate[]).map((template) => ({
+              name: template.name,
+              value: template.uriTemplate,
+              description: template.description,
+            })),
+          ],
+        });
+        const uri =
+          resources.find((resource) => resource.uri === resourceUri)?.uri ??
+          (resourceTemplates as ResourceTemplate[]).find(
+            (resourceTemplate) => resourceTemplate.uriTemplate === resourceUri
+          )?.uriTemplate;
+        if (uri == null) {
+          console.error("Resource not found.");
+        } else {
+          await getResource(uri);
+        }
+        break;
       case "Prompts":
 
       case "Query":
@@ -78,6 +103,29 @@ async function getTool(tool: Tool) {
   });
 
   console.log("Tool result:", (result.content as [{ text: string }])[0].text);
+}
+
+async function getResource(uri: string) {
+  let finalUri = uri;
+  const paramMatches = uri.match(/{([^}]+)}/g);
+
+  if (paramMatches != null) {
+    for (const paramMatch of paramMatches) {
+      const paramName = paramMatch.replace("{", "").replace("}", "");
+      const paramValue = await input({
+        message: `Enter value for ${paramName}:`,
+      });
+      finalUri = finalUri.replace(paramMatch, paramValue);
+    }
+  }
+
+  const res = await client.readResource({
+    uri: finalUri,
+  });
+
+  console.log(
+    JSON.stringify(JSON.parse(res.contents[0].text as string), null, 2)
+  );
 }
 
 main();
